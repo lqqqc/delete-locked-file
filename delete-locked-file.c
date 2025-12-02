@@ -1,4 +1,12 @@
-#include "main.h"
+#pragma comment(lib, "Shlwapi.lib")
+
+#include <Windows.h>
+#include <shlwapi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define DS_STREAM_RENAME L":dlf"
+#define DS_DEBUG_LOG(msg) wprintf(L"[LOG] - %s\n", msg)
 
 static
 HANDLE
@@ -10,14 +18,14 @@ ds_open_handle(
 }
 
 static
-void *
+void*
 ds_rename_handle(
 	HANDLE hHandle
 )
 {
 	LPCWSTR lpwStream = DS_STREAM_RENAME;
 	PFILE_RENAME_INFO pfRename = (PFILE_RENAME_INFO)malloc(sizeof(FILE_RENAME_INFO) + sizeof(WCHAR) * wcslen(lpwStream)); // FILE_RENAME_INFO contains space for 1 WCHAR without NULL-byte
-	if(pfRename == NULL)
+	if (pfRename == NULL)
 	{
 		DS_DEBUG_LOG(L"could not allocate memory");
 		return NULL;
@@ -29,7 +37,7 @@ ds_rename_handle(
 	RtlCopyMemory(pfRename->FileName, lpwStream, sizeof(WCHAR) * (wcslen(lpwStream) + 1));
 
 	BOOL fRenameOk = SetFileInformationByHandle(hHandle, FileRenameInfo, pfRename, (DWORD)(sizeof(FILE_RENAME_INFO) + sizeof(WCHAR) * wcslen(lpwStream)));
-	if(!fRenameOk)
+	if (!fRenameOk)
 	{
 		free(pfRename);
 		return NULL;
@@ -38,7 +46,7 @@ ds_rename_handle(
 }
 
 static
-BOOL 
+BOOL
 ds_deposite_handle(
 	HANDLE hHandle
 )
@@ -53,31 +61,33 @@ ds_deposite_handle(
 }
 
 int
-main(
+wmain(
 	int argc,
-	char** argv
+	wchar_t* argv[]
 )
 {
-	WCHAR wcPath[MAX_PATH + 1];
-	RtlSecureZeroMemory(wcPath, sizeof(wcPath));
-
-	// get the path to the current running process ctx
-	if (GetModuleFileNameW(NULL, wcPath, MAX_PATH) == 0)
+	if (argc < 2)
 	{
-		DS_DEBUG_LOG(L"failed to get the current module handle");
+		wprintf(L"Usage: delete-locked-file.exe <path_to_file>");
 		return 0;
 	}
+
+	WCHAR wcPath[MAX_PATH + 1];
+	RtlSecureZeroMemory(wcPath, sizeof(wcPath));
+	wcscpy_s(wcPath, MAX_PATH, argv[1]);
+
+	//WCHAR wcPath[] = argv[1];
 
 	HANDLE hCurrent = ds_open_handle(wcPath);
 	if (hCurrent == INVALID_HANDLE_VALUE)
 	{
-		DS_DEBUG_LOG(L"failed to acquire handle to current running process");
+		DS_DEBUG_LOG(L"failed to acquire handle to target file");
 		return 0;
 	}
 
 	// rename the associated HANDLE's file name
 	DS_DEBUG_LOG(L"attempting to rename file name");
-	void *pfRename = ds_rename_handle(hCurrent);
+	void* pfRename = ds_rename_handle(hCurrent);
 	if (pfRename == NULL)
 	{
 		DS_DEBUG_LOG(L"failed to rename to stream");
@@ -93,7 +103,7 @@ main(
 	hCurrent = ds_open_handle(wcPath);
 	if (hCurrent == INVALID_HANDLE_VALUE)
 	{
-		DS_DEBUG_LOG(L"failed to reopen current module");
+		DS_DEBUG_LOG(L"failed to reopen target file after rename");
 		return 0;
 	}
 
@@ -110,10 +120,10 @@ main(
 	// verify we've been deleted
 	if (PathFileExistsW(wcPath))
 	{
-		DS_DEBUG_LOG(L"failed to delete copy, file still exists");
+		DS_DEBUG_LOG(L"failed to delete, file still exists");
 		return 0;
 	}
 
-	DS_DEBUG_LOG(L"successfully deleted self from disk");
+	DS_DEBUG_LOG(L"successfully deleted target file from disk");
 	return 1;
 }
